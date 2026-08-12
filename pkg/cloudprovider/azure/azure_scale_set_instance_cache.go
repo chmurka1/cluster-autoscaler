@@ -54,7 +54,7 @@ the last time.
 // This struct also contains related locks and cache interval variables.
 type InstanceCache struct {
 	// instanceCache tracks the VMs in the ScaleSet, in the form of corresponding cloudprovider.Instances.
-	// instanceCache directly backs the efficient response to NodeGroup.Nodes(), implemented by ScaleSet.Nodes().
+	// instanceCache directly backs the efficient response to NodeGroup.Nodes(context.TODO()), implemented by ScaleSet.Nodes(context.TODO()).
 	// It is periodially updated from VMSS using virtualMachineScaleSetVMsClient.List().
 	instanceCache []cloudprovider.Instance
 	// instancesRefreshPeriod is how often instance cache is refreshed from VMSS.

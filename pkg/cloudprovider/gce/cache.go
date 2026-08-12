@@ -17,6 +17,7 @@ limitations under the License.
 package gce
 
 import (
+	"context"
 	"reflect"
 	"sync"
 	"time"
@@ -103,7 +104,7 @@ func NewGceCache() *GceCache {
 }
 
 // RegisterMig returns true if the node group wasn't in cache before, or its config was updated.
-func (gc *GceCache) RegisterMig(newMig Mig) bool {
+func (gc *GceCache) RegisterMig(ctx context.Context, newMig Mig) bool {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -123,7 +124,7 @@ func (gc *GceCache) RegisterMig(newMig Mig) bool {
 }
 
 // UnregisterMig returns true if the node group has been removed, and false if it was already missing from cache.
-func (gc *GceCache) UnregisterMig(toBeRemoved Mig) bool {
+func (gc *GceCache) UnregisterMig(ctx context.Context, toBeRemoved Mig) bool {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -159,7 +160,7 @@ func (gc *GceCache) GetMigs() []Mig {
 }
 
 // GetMigInstances returns the cached instances for a given MIG GceRef
-func (gc *GceCache) GetMigInstances(migRef GceRef) ([]GceInstance, bool) {
+func (gc *GceCache) GetMigInstances(ctx context.Context, migRef GceRef) ([]GceInstance, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -172,7 +173,7 @@ func (gc *GceCache) GetMigInstances(migRef GceRef) ([]GceInstance, bool) {
 
 // GetMigInstancesUpdateTime returns the timestamp when the cached instances
 // were updated for a given MIG GceRef
-func (gc *GceCache) GetMigInstancesUpdateTime(migRef GceRef) (time.Time, bool) {
+func (gc *GceCache) GetMigInstancesUpdateTime(ctx context.Context, migRef GceRef) (time.Time, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -193,7 +194,7 @@ func (gc *GceCache) IsMigInstancesCacheEmpty(migRef GceRef) bool {
 }
 
 // GetMigForInstance returns the cached MIG for instance GceRef
-func (gc *GceCache) GetMigForInstance(instanceRef GceRef) (GceRef, bool) {
+func (gc *GceCache) GetMigForInstance(ctx context.Context, instanceRef GceRef) (GceRef, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -206,7 +207,7 @@ func (gc *GceCache) GetMigForInstance(instanceRef GceRef) (GceRef, bool) {
 
 // IsMigUnknownForInstance checks if MIG was marked as unknown for instance, meaning that
 // a Mig to which this instance should belong does not list it as one of its instances.
-func (gc *GceCache) IsMigUnknownForInstance(instanceRef GceRef) bool {
+func (gc *GceCache) IsMigUnknownForInstance(ctx context.Context, instanceRef GceRef) bool {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -246,7 +247,7 @@ func (gc *GceCache) MarkInstanceMigUnknown(instanceRef GceRef) {
 }
 
 // InvalidateAllMigInstances clears the mig instances cache
-func (gc *GceCache) InvalidateAllMigInstances() {
+func (gc *GceCache) InvalidateAllMigInstances(ctx context.Context) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -256,7 +257,7 @@ func (gc *GceCache) InvalidateAllMigInstances() {
 }
 
 // InvalidateMigInstances clears the mig instances cache for a given Mig
-func (gc *GceCache) InvalidateMigInstances(migRef GceRef) {
+func (gc *GceCache) InvalidateMigInstances(ctx context.Context, migRef GceRef) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -266,7 +267,7 @@ func (gc *GceCache) InvalidateMigInstances(migRef GceRef) {
 }
 
 // InvalidateInstancesToMig clears the instance to mig mapping for a GceRef
-func (gc *GceCache) InvalidateInstancesToMig(migRef GceRef) {
+func (gc *GceCache) InvalidateInstancesToMig(ctx context.Context, migRef GceRef) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -275,7 +276,7 @@ func (gc *GceCache) InvalidateInstancesToMig(migRef GceRef) {
 }
 
 // InvalidateAllInstancesToMig clears the instance to mig cache
-func (gc *GceCache) InvalidateAllInstancesToMig() {
+func (gc *GceCache) InvalidateAllInstancesToMig(ctx context.Context) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -316,7 +317,7 @@ func (gc *GceCache) SetResourceLimiter(resourceLimiter *cloudprovider.ResourceLi
 }
 
 // GetResourceLimiter returns resource limiter.
-func (gc *GceCache) GetResourceLimiter() (*cloudprovider.ResourceLimiter, error) {
+func (gc *GceCache) GetResourceLimiter(ctx context.Context) (*cloudprovider.ResourceLimiter, error) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -324,7 +325,7 @@ func (gc *GceCache) GetResourceLimiter() (*cloudprovider.ResourceLimiter, error)
 }
 
 // GetMigTargetSize returns the cached targetSize for a GceRef
-func (gc *GceCache) GetMigTargetSize(ref GceRef) (int64, bool) {
+func (gc *GceCache) GetMigTargetSize(ctx context.Context, ref GceRef) (int64, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -356,7 +357,7 @@ func (gc *GceCache) IsMigTargetSizeCacheEmpty() bool {
 }
 
 // InvalidateMigTargetSize clears the target size cache
-func (gc *GceCache) InvalidateMigTargetSize(ref GceRef) {
+func (gc *GceCache) InvalidateMigTargetSize(ctx context.Context, ref GceRef) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -367,7 +368,7 @@ func (gc *GceCache) InvalidateMigTargetSize(ref GceRef) {
 }
 
 // InvalidateAllMigTargetSizes clears the target size cache
-func (gc *GceCache) InvalidateAllMigTargetSizes() {
+func (gc *GceCache) InvalidateAllMigTargetSizes(ctx context.Context) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -376,7 +377,7 @@ func (gc *GceCache) InvalidateAllMigTargetSizes() {
 }
 
 // GetMigIsStable returns the cached isStable for a GceRef
-func (gc *GceCache) GetMigIsStable(ref GceRef) (bool, bool) {
+func (gc *GceCache) GetMigIsStable(ctx context.Context, ref GceRef) (bool, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -396,7 +397,7 @@ func (gc *GceCache) SetMigIsStable(ref GceRef, isStable bool) {
 }
 
 // InvalidateAllMigIsStable clears the isStable cache
-func (gc *GceCache) InvalidateAllMigIsStable() {
+func (gc *GceCache) InvalidateAllMigIsStable(ctx context.Context) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -405,7 +406,7 @@ func (gc *GceCache) InvalidateAllMigIsStable() {
 }
 
 // GetMigInstanceTemplateName returns the cached instance template ref for a mig GceRef
-func (gc *GceCache) GetMigInstanceTemplateName(ref GceRef) (InstanceTemplateName, bool) {
+func (gc *GceCache) GetMigInstanceTemplateName(ctx context.Context, ref GceRef) (InstanceTemplateName, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -425,7 +426,7 @@ func (gc *GceCache) SetMigInstanceTemplateName(ref GceRef, instanceTemplateName 
 }
 
 // InvalidateMigInstanceTemplateName clears the instance template ref cache for a mig GceRef
-func (gc *GceCache) InvalidateMigInstanceTemplateName(ref GceRef) {
+func (gc *GceCache) InvalidateMigInstanceTemplateName(ctx context.Context, ref GceRef) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -436,7 +437,7 @@ func (gc *GceCache) InvalidateMigInstanceTemplateName(ref GceRef) {
 }
 
 // InvalidateAllMigInstanceTemplateNames clears the instance template ref cache
-func (gc *GceCache) InvalidateAllMigInstanceTemplateNames() {
+func (gc *GceCache) InvalidateAllMigInstanceTemplateNames(ctx context.Context) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -445,7 +446,7 @@ func (gc *GceCache) InvalidateAllMigInstanceTemplateNames() {
 }
 
 // GetMigInstanceTemplate returns the cached gce.InstanceTemplate for a mig GceRef
-func (gc *GceCache) GetMigInstanceTemplate(ref GceRef) (*gce.InstanceTemplate, bool) {
+func (gc *GceCache) GetMigInstanceTemplate(ctx context.Context, ref GceRef) (*gce.InstanceTemplate, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -486,7 +487,7 @@ func (gc *GceCache) InvalidateAllMigInstanceTemplates() {
 
 // DropInstanceTemplatesForMissingMigs clears the instance template
 // cache intended MIGs which are no longer present in the cluster
-func (gc *GceCache) DropInstanceTemplatesForMissingMigs(currentMigs []Mig) {
+func (gc *GceCache) DropInstanceTemplatesForMissingMigs(ctx context.Context, currentMigs []Mig) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -504,7 +505,7 @@ func (gc *GceCache) DropInstanceTemplatesForMissingMigs(currentMigs []Mig) {
 }
 
 // GetMigKubeEnv returns the cached KubeEnv for a mig GceRef
-func (gc *GceCache) GetMigKubeEnv(ref GceRef) (KubeEnv, bool) {
+func (gc *GceCache) GetMigKubeEnv(ctx context.Context, ref GceRef) (KubeEnv, bool) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 
@@ -524,7 +525,7 @@ func (gc *GceCache) SetMigKubeEnv(ref GceRef, kubeEnv KubeEnv) {
 }
 
 // InvalidateMigKubeEnv clears the kube-env cache for a mig GceRef
-func (gc *GceCache) InvalidateMigKubeEnv(ref GceRef) {
+func (gc *GceCache) InvalidateMigKubeEnv(ctx context.Context, ref GceRef) {
 	gc.cacheMutex.Lock()
 	defer gc.cacheMutex.Unlock()
 

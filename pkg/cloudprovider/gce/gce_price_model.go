@@ -17,6 +17,7 @@ limitations under the License.
 package gce
 
 import (
+	"context"
 	"math"
 	"strconv"
 	"time"
@@ -56,7 +57,7 @@ const DefaultBootDiskSizeGB = 100
 
 // NodePrice returns a price of running the given node for a given period of time.
 // All prices are in USD.
-func (model *GcePriceModel) NodePrice(node *apiv1.Node, startTime time.Time, endTime time.Time) (float64, error) {
+func (model *GcePriceModel) NodePrice(ctx context.Context, node *apiv1.Node, startTime time.Time, endTime time.Time) (float64, error) {
 	price := 0.0
 	basePriceFound := false
 	machineType := ""
@@ -155,7 +156,7 @@ func (model *GcePriceModel) getPreemptibleDiscount(node *apiv1.Node) float64 {
 
 // PodPrice returns a theoretical minimum price of running a pod for a given
 // period of time on a perfectly matching machine.
-func (model *GcePriceModel) PodPrice(pod *apiv1.Pod, startTime time.Time, endTime time.Time) (float64, error) {
+func (model *GcePriceModel) PodPrice(ctx context.Context, pod *apiv1.Pod, startTime time.Time, endTime time.Time) (float64, error) {
 	podRequests := podutils.PodRequests(pod)
 	price := model.getBasePrice(podRequests, "", startTime, endTime) + model.getAdditionalPrice(podRequests, startTime, endTime)
 	return price, nil

@@ -17,6 +17,7 @@ limitations under the License.
 package gce
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -87,7 +88,7 @@ type GceReserved struct{}
 
 // CalculateKernelReserved computes how much memory Linux kernel will reserve.
 // TODO(jkaniuk): account for crashkernel reservation on RHEL / CentOS
-func (r *GceReserved) CalculateKernelReserved(m MigOsInfo, physicalMemory int64) int64 {
+func (r *GceReserved) CalculateKernelReserved(ctx context.Context, m MigOsInfo, physicalMemory int64) int64 {
 	os := m.Os()
 	osDistribution := m.OsDistribution()
 	arch := m.Arch()
@@ -128,7 +129,7 @@ func (r *GceReserved) CalculateKernelReserved(m MigOsInfo, physicalMemory int64)
 }
 
 // ParseEvictionHardOrGetDefault tries to parse evictionHard map, else fills defaults to be used.
-func ParseEvictionHardOrGetDefault(evictionHard map[string]string) *EvictionHard {
+func ParseEvictionHardOrGetDefault(ctx context.Context, evictionHard map[string]string) *EvictionHard {
 	if evictionHard == nil {
 		return &EvictionHard{
 			MemoryEvictionQuantity:        defaultKubeletEvictionHardMemory,
@@ -251,7 +252,7 @@ var ephemeralStorageOnLocalSSDFilesystemOverheadInKiBByOSAndDiskCount = map[Oper
 // so interpolating wouldn't make much sense. Instead, we use the next count for
 // which we measured a filesystem overhead, which is a safer approximation
 // (better to reserve more and not scale up than not enough and not schedule).
-func EphemeralStorageOnLocalSSDFilesystemOverheadInBytes(diskCount int64, osDistribution OperatingSystemDistribution) int64 {
+func EphemeralStorageOnLocalSSDFilesystemOverheadInBytes(ctx context.Context, diskCount int64, osDistribution OperatingSystemDistribution) int64 {
 	var measuredCount int64
 	if diskCount <= 8 {
 		measuredCount = diskCount
@@ -270,7 +271,7 @@ func EphemeralStorageOnLocalSSDFilesystemOverheadInBytes(diskCount int64, osDist
 }
 
 // CalculateOSReservedEphemeralStorage estimates how much ephemeral storage OS will reserve and eviction threshold
-func (r *GceReserved) CalculateOSReservedEphemeralStorage(m MigOsInfo, diskSize int64) int64 {
+func (r *GceReserved) CalculateOSReservedEphemeralStorage(ctx context.Context, m MigOsInfo, diskSize int64) int64 {
 	osDistribution := m.OsDistribution()
 	arch := m.Arch()
 	switch osDistribution {
