@@ -89,6 +89,7 @@ type GceReserved struct{}
 // CalculateKernelReserved computes how much memory Linux kernel will reserve.
 // TODO(jkaniuk): account for crashkernel reservation on RHEL / CentOS
 func (r *GceReserved) CalculateKernelReserved(ctx context.Context, m MigOsInfo, physicalMemory int64) int64 {
+	logger := klog.FromContext(ctx)
 	os := m.Os()
 	osDistribution := m.OsDistribution()
 	arch := m.Arch()
@@ -123,13 +124,14 @@ func (r *GceReserved) CalculateKernelReserved(ctx context.Context, m MigOsInfo, 
 	case OperatingSystemWindows:
 		return 0
 	default:
-		klog.Errorf("CalculateKernelReserved called for unknown operating system %v", os)
+		logger.Error(nil, "CalculateKernelReserved called for unknown operating system", "os", os)
 		return 0
 	}
 }
 
 // ParseEvictionHardOrGetDefault tries to parse evictionHard map, else fills defaults to be used.
 func ParseEvictionHardOrGetDefault(ctx context.Context, evictionHard map[string]string) *EvictionHard {
+	logger := klog.FromContext(ctx)
 	if evictionHard == nil {
 		return &EvictionHard{
 			MemoryEvictionQuantity:        defaultKubeletEvictionHardMemory,
@@ -141,7 +143,7 @@ func ParseEvictionHardOrGetDefault(ctx context.Context, evictionHard map[string]
 	// CalculateOrDefault for Memory
 	memory, found := evictionHard[MemoryEvictionHardTag]
 	if !found {
-		klog.V(4).Info("evictionHard memory tag not found, using default")
+		logger.V(4).Info("EvictionHard memory tag not found, using default")
 		evictionReturn.MemoryEvictionQuantity = defaultKubeletEvictionHardMemory
 	} else {
 		memQuantity, err := resource.ParseQuantity(memory)
@@ -150,7 +152,7 @@ func ParseEvictionHardOrGetDefault(ctx context.Context, evictionHard map[string]
 		} else {
 			value, possible := memQuantity.AsInt64()
 			if !possible {
-				klog.Errorf("unable to parse eviction ratio for memory: %v", err)
+				logger.Error(err, "Unable to parse eviction ratio for memory")
 				evictionReturn.MemoryEvictionQuantity = defaultKubeletEvictionHardMemory
 			} else {
 				evictionReturn.MemoryEvictionQuantity = value
@@ -161,12 +163,12 @@ func ParseEvictionHardOrGetDefault(ctx context.Context, evictionHard map[string]
 	// CalculateOrDefault for Ephemeral Storage
 	ephRatio, found := evictionHard[EphemeralStorageEvictionHardTag]
 	if !found {
-		klog.V(4).Info("evictionHard ephemeral storage tag not found, using default")
+		logger.V(4).Info("EvictionHard ephemeral storage tag not found, using default")
 		evictionReturn.EphemeralStorageEvictionRatio = defaultKubeletEvictionHardEphemeralStorageRatio
 	} else {
 		value, err := parsePercentageToRatio(ephRatio)
 		if err != nil {
-			klog.Errorf("unable to parse eviction ratio for ephemeral storage: %v", err)
+			logger.Error(err, "Unable to parse eviction ratio for ephemeral storage")
 			evictionReturn.EphemeralStorageEvictionRatio = defaultKubeletEvictionHardEphemeralStorageRatio
 		} else {
 			if value < 0.0 || value > 1.0 {
@@ -253,6 +255,7 @@ var ephemeralStorageOnLocalSSDFilesystemOverheadInKiBByOSAndDiskCount = map[Oper
 // which we measured a filesystem overhead, which is a safer approximation
 // (better to reserve more and not scale up than not enough and not schedule).
 func EphemeralStorageOnLocalSSDFilesystemOverheadInBytes(ctx context.Context, diskCount int64, osDistribution OperatingSystemDistribution) int64 {
+	logger := klog.FromContext(ctx)
 	var measuredCount int64
 	if diskCount <= 8 {
 		measuredCount = diskCount
@@ -264,7 +267,7 @@ func EphemeralStorageOnLocalSSDFilesystemOverheadInBytes(ctx context.Context, di
 
 	o, ok := ephemeralStorageOnLocalSSDFilesystemOverheadInKiBByOSAndDiskCount[osDistribution]
 	if !ok {
-		klog.Errorf("Ephemeral storage backed by local SSDs is not supported for image family %v", osDistribution)
+		logger.Error(nil, "Ephemeral storage backed by local SSDs is not supported for image family", "osDistribution", osDistribution)
 		return 0
 	}
 	return o[measuredCount] * KiB
@@ -272,6 +275,7 @@ func EphemeralStorageOnLocalSSDFilesystemOverheadInBytes(ctx context.Context, di
 
 // CalculateOSReservedEphemeralStorage estimates how much ephemeral storage OS will reserve and eviction threshold
 func (r *GceReserved) CalculateOSReservedEphemeralStorage(ctx context.Context, m MigOsInfo, diskSize int64) int64 {
+	logger := klog.FromContext(ctx)
 	osDistribution := m.OsDistribution()
 	arch := m.Arch()
 	switch osDistribution {
@@ -291,7 +295,7 @@ func (r *GceReserved) CalculateOSReservedEphemeralStorage(ctx context.Context, m
 		storage += int64(math.Ceil(0.010 * GiB))  // over-provisioning buffer
 		return storage
 	default:
-		klog.Errorf("CalculateReservedAndEvictionEphemeralStorage called for unknown os distribution %v", osDistribution)
+		logger.Error(nil, "CalculateReservedAndEvictionEphemeralStorage called for unknown os distribution", "osDistribution", osDistribution)
 		return 0
 	}
 }

@@ -268,11 +268,12 @@ func (c *cachingMigInfoProvider) isMigCreatingOrDeletingInstances(mig Mig) bool 
 
 // updateMigInstancesCache updates the mig instances for each mig
 func (c *cachingMigInfoProvider) updateMigInstancesCache(ctx context.Context, migToInstances map[GceRef][]GceInstance) error {
+	logger := klog.FromContext(ctx)
 	defer metrics.UpdateDurationFromStart(ctx, metrics.BulkListMigInstances, time.Now())
 	inconsistentInstancesMigsCount := 0
 	defer func() {
 		if inconsistentInstancesMigsCount > 0 {
-			klog.Warningf("Inconsistent instances migs count: %v", inconsistentInstancesMigsCount)
+			logger.Info("Recording inconsistent instances migs count", "migsCount", inconsistentInstancesMigsCount)
 		}
 		metrics.UpdateInconsistentInstancesMigsCount(inconsistentInstancesMigsCount)
 	}()
@@ -326,14 +327,15 @@ func (c *cachingMigInfoProvider) findMigWithMatchingBasename(ctx context.Context
 }
 
 func (c *cachingMigInfoProvider) fillMigInstances(ctx context.Context, migRef GceRef) error {
+	logger := klog.FromContext(ctx)
 	if val, ok := c.cache.GetMigInstancesUpdateTime(ctx, migRef); ok {
 		// do not regenerate MIG instances cache if last refresh happened recently.
 		if c.timeProvider.Now().Sub(val) < c.migInstancesMinRefreshWaitTime {
-			klog.V(4).Infof("Not regenerating MIG instances cache for %s, as it was refreshed in last MinRefreshWaitTime (%s).", migRef.String(), c.migInstancesMinRefreshWaitTime)
+			logger.V(4).Info("Not regenerating MIG instances cache, as it was refreshed in last MinRefreshWaitTime", "mig", migRef.String(), "minRefreshWaitTime", c.migInstancesMinRefreshWaitTime)
 			return nil
 		}
 	}
-	klog.V(4).Infof("Regenerating MIG instances cache for %s", migRef.String())
+	logger.V(4).Info("Regenerating MIG instances cache", "mig", migRef.String())
 	instances, err := c.gceClient.FetchMigInstances(ctx, migRef)
 	if err != nil {
 		c.migLister.HandleMigIssue(migRef, err)
@@ -431,6 +433,7 @@ func (c *cachingMigInfoProvider) GetMigInstanceTemplateName(ctx context.Context,
 }
 
 func (c *cachingMigInfoProvider) GetMigInstanceTemplate(ctx context.Context, migRef GceRef) (*gce.InstanceTemplate, error) {
+	logger := klog.FromContext(ctx)
 	instanceTemplateName, err := c.GetMigInstanceTemplateName(ctx, migRef)
 	if err != nil {
 		return nil, err
@@ -440,7 +443,7 @@ func (c *cachingMigInfoProvider) GetMigInstanceTemplate(ctx context.Context, mig
 	if found && template.Name == instanceTemplateName.Name {
 		return template, nil
 	}
-	klog.V(2).Infof("Instance template of mig %v changed to %v", migRef.Name, instanceTemplateName.Name)
+	logger.V(2).Info("Instance template of mig changed", "migName", migRef.Name, "instanceTemplate", instanceTemplateName.Name)
 	template, err = c.gceClient.FetchMigTemplate(ctx, migRef, instanceTemplateName.Name, instanceTemplateName.Regional)
 	if err != nil {
 		return nil, err
@@ -474,6 +477,7 @@ func (c *cachingMigInfoProvider) GetMigKubeEnv(ctx context.Context, migRef GceRe
 
 // filMigInfoCache needs to be called with migInfoMutex locked
 func (c *cachingMigInfoProvider) fillMigInfoCache(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
 	var zones []string
 	for zone := range c.listAllZonesWithMigs() {
 		zones = append(zones, zone)
@@ -489,7 +493,7 @@ func (c *cachingMigInfoProvider) fillMigInfoCache(ctx context.Context) error {
 	failedZoneCount := 0
 	for idx, err := range errors {
 		if err != nil {
-			klog.Errorf("Error listing migs from zone %v; err=%v", zones[idx], err)
+			logger.Error(err, "Error listing migs from zone", "zones", zones[idx])
 			failedZones[zones[idx]] = err
 			failedZoneCount++
 		}
@@ -518,7 +522,7 @@ func (c *cachingMigInfoProvider) fillMigInfoCache(ctx context.Context) error {
 					// At this point we assume its the default project but this could eventually lead to a cache miss
 					// if the project information is incorrect.
 					projectId = c.projectId
-					klog.Errorf("Unable to extract projectID from MIG self link: %s, err: %v", zoneMig.SelfLink, err)
+					logger.Error(err, "Unable to extract projectID from MIG self link", "link", zoneMig.SelfLink)
 				}
 			}
 			zoneMigRef := GceRef{
@@ -552,12 +556,13 @@ func (c *cachingMigInfoProvider) fillSingleMigInfo(ctx context.Context, migRef G
 }
 
 func (c *cachingMigInfoProvider) setMigInfoCache(ctx context.Context, migRef GceRef, mig *gce.InstanceGroupManager) {
+	logger := klog.FromContext(ctx)
 	c.cache.SetMigTargetSize(migRef, mig.TargetSize+mig.TargetSuspendedSize)
 	c.cache.SetMigBasename(migRef, mig.BaseInstanceName)
 	if mig.Status != nil {
 		c.cache.SetMigIsStable(migRef, mig.Status.IsStable)
 	} else {
-		klog.Warningf("MIG %v has nil status, assuming isStable=false", migRef)
+		logger.Info("MIG has nil status, assuming isStable=false", "mig", migRef)
 		c.cache.SetMigIsStable(migRef, false)
 	}
 	c.cache.SetListManagedInstancesResults(migRef, mig.ListManagedInstancesResults)

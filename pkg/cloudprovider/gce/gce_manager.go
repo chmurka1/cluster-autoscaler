@@ -232,13 +232,14 @@ func (m *gceManagerImpl) Cleanup(ctx context.Context) error {
 
 // registerMig registers mig in GceManager. Returns true if the node group didn't exist before or its config has changed.
 func (m *gceManagerImpl) registerMig(ctx context.Context, mig Mig) bool {
+	logger := klog.FromContext(ctx)
 	changed := m.cache.RegisterMig(ctx, mig)
 	if changed {
 		// Try to build a node from template to validate that this group
 		// can be scaled up from 0 nodes.
 		// We may never need to do it, so just log error if it fails.
 		if _, err := m.GetMigTemplateNode(ctx, mig); err != nil {
-			klog.Errorf("Can't build node from template for %s, won't be able to scale from 0: %v", mig.GceRef().String(), err)
+			logger.Error(err, "Can't build node from template, won't be able to scale from 0", "mig", mig.GceRef().String())
 		}
 	}
 	return changed
@@ -256,7 +257,8 @@ func (m *gceManagerImpl) IsMigStable(ctx context.Context, mig Mig) (bool, error)
 
 // SetMigSize sets MIG size.
 func (m *gceManagerImpl) SetMigSize(ctx context.Context, mig Mig, size int64) error {
-	klog.V(0).Infof("Setting mig size %s to %d", mig.Id(), size)
+	logger := klog.FromContext(ctx)
+	logger.V(0).Info("Setting mig size", "mig", mig.Id(), "size", size)
 	m.cache.InvalidateMigTargetSize(ctx, mig.GceRef())
 	err := m.GceService.ResizeMig(ctx, mig.GceRef(), size)
 	if err != nil {
@@ -326,6 +328,7 @@ func (m *gceManagerImpl) Refresh(ctx context.Context) error {
 }
 
 func (m *gceManagerImpl) CreateInstances(ctx context.Context, mig Mig, delta int64) error {
+	logger := klog.FromContext(ctx)
 	if delta == 0 {
 		return nil
 	}
@@ -347,7 +350,7 @@ func (m *gceManagerImpl) CreateInstances(ctx context.Context, mig Mig, delta int
 	for i := 0; i < totalReqs; i++ {
 		increment := min(remaining, createInstancesRequestLimit)
 		if totalReqs > 1 {
-			klog.Infof("Sending chunked GCE createInstances request. Request: %d/%d RequestSize: %v", i+1, totalReqs, increment)
+			logger.Info("Sending chunked GCE createInstances request", "requestNumber", i+1, "totalRequests", totalReqs, "requestSize", increment)
 		}
 		ids, err := m.GceService.CreateInstances(ctx, mig.GceRef(), baseName, increment, instanceIds)
 		if err != nil {
@@ -362,40 +365,42 @@ func (m *gceManagerImpl) CreateInstances(ctx context.Context, mig Mig, delta int
 }
 
 func (m *gceManagerImpl) forceRefresh(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
 	m.clearMachinesCache(ctx)
 	if err := m.fetchAutoMigs(ctx); err != nil {
-		klog.Errorf("Failed to fetch MIGs: %v", err)
+		logger.Error(err, "Failed to fetch MIGs")
 		return err
 	}
 	m.refreshAutoscalingOptions(ctx)
 	m.lastRefresh = time.Now()
-	klog.V(2).Infof("Refreshed GCE resources, next refresh after %v", m.lastRefresh.Add(refreshInterval))
+	logger.V(2).Info("Refreshed GCE resources", "nextRefresh", m.lastRefresh.Add(refreshInterval))
 	return nil
 }
 
 func (m *gceManagerImpl) refreshAutoscalingOptions(ctx context.Context) {
+	logger := klog.FromContext(ctx)
 	for _, mig := range m.migLister.GetMigs() {
 		template, err := m.migInfoProvider.GetMigInstanceTemplate(ctx, mig.GceRef())
 		if err != nil {
-			klog.Warningf("Not evaluating autoscaling options for %q MIG: failed to find corresponding instance template: %v", mig.GceRef(), err)
+			logger.Info("Not evaluating autoscaling options MIG: failed to find corresponding instance template", "mig", mig.GceRef().String(), "err", err)
 			continue
 		}
 		if template.Properties == nil {
-			klog.Warningf("Failed to extract autoscaling options from %q metadata: instance template is incomplete", template.Name)
+			logger.Info("Failed to extract autoscaling options metadata: instance template is incomplete", "template", template.Name)
 			continue
 		}
 		kubeEnv, err := m.migInfoProvider.GetMigKubeEnv(ctx, mig.GceRef())
 		if err != nil {
-			klog.Warningf("Failed to extract autoscaling options from %q instance template's metadata: can't get KubeEnv: %v", template.Name, err)
+			logger.Info("Failed to extract autoscaling options instance template's metadata: can't get KubeEnv", "template", template.Name, "err", err)
 			continue
 		}
 		options, err := extractAutoscalingOptionsFromKubeEnv(ctx, kubeEnv)
 		if err != nil {
-			klog.Warningf("Failed to extract autoscaling options from %q instance template's metadata: %v", template.Name, err)
+			logger.Info("Failed to extract autoscaling options instance template's metadata", "template", template.Name, "err", err)
 			continue
 		}
 		if !reflect.DeepEqual(m.cache.GetAutoscalingOptions(mig.GceRef()), options) {
-			klog.V(4).Infof("Extracted autoscaling options from %q instance template KubeEnv: %v", template.Name, options)
+			logger.V(4).Info("Extracted autoscaling options instance template KubeEnv", "template", template.Name, "options", options)
 		}
 		m.cache.SetAutoscalingOptions(mig.GceRef(), options)
 	}
@@ -465,6 +470,7 @@ func (m *gceManagerImpl) buildMigFromSpec(s *dynamic.NodeGroupSpec) (Mig, error)
 // Fetch automatically discovered MIGs. These MIGs should be unregistered if
 // they no longer exist in GCE.
 func (m *gceManagerImpl) fetchAutoMigs(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
 	exists := make(map[GceRef]bool)
 	var changed int32 = 0
 
@@ -485,7 +491,7 @@ func (m *gceManagerImpl) fetchAutoMigs(ctx context.Context) error {
 				// This MIG was explicitly configured, but would also be
 				// autodiscovered. We want the explicitly configured min and max
 				// nodes to take precedence.
-				klog.V(3).Infof("Ignoring explicitly configured MIG %s in autodiscovery.", mig.GceRef().String())
+				logger.V(3).Info("Ignoring explicitly configured MIG in autodiscovery", "mig", mig.GceRef().String())
 				continue
 			}
 			toRegister = append(toRegister, mig)
@@ -495,7 +501,7 @@ func (m *gceManagerImpl) fetchAutoMigs(ctx context.Context) error {
 	workqueue.ParallelizeUntil(ctx, m.concurrentGceRefreshes, len(toRegister), func(piece int) {
 		mig := toRegister[piece]
 		if m.registerMig(ctx, mig) {
-			klog.V(3).Infof("Autodiscovered MIG %s", mig.GceRef().String())
+			logger.V(3).Info("Autodiscovered MIG", "mig", mig.GceRef().String())
 			atomic.StoreInt32(&changed, int32(1))
 		}
 	}, workqueue.WithChunkSize(m.concurrentGceRefreshes))
@@ -520,6 +526,7 @@ func (m *gceManagerImpl) GetResourceLimiter(ctx context.Context) (*cloudprovider
 }
 
 func (m *gceManagerImpl) clearMachinesCache(ctx context.Context) {
+	logger := klog.FromContext(ctx)
 	if m.machinesCacheLastRefresh.Add(machinesRefreshInterval).After(time.Now()) {
 		return
 	}
@@ -527,7 +534,7 @@ func (m *gceManagerImpl) clearMachinesCache(ctx context.Context) {
 	m.cache.InvalidateAllMachines()
 	nextRefresh := time.Now()
 	m.machinesCacheLastRefresh = nextRefresh
-	klog.V(2).Infof("Cleared machine types cache, next clear after %v", nextRefresh)
+	logger.V(2).Info("Cleared machine types cache", "nextRefresh", nextRefresh)
 }
 
 // Code borrowed from gce cloud provider. Reuse the original as soon as it becomes public.

@@ -123,9 +123,10 @@ func (gce *GceCloudProvider) NodeGroups(ctx context.Context) []cloudprovider.Nod
 
 // NodeGroupForNode returns the node group for the given node.
 func (gce *GceCloudProvider) NodeGroupForNode(ctx context.Context, node *apiv1.Node) (cloudprovider.NodeGroup, error) {
+	logger := klog.FromContext(ctx)
 	ref, err := GceRefFromProviderId(node.Spec.ProviderID)
 	if err != nil {
-		klog.Errorf("Error extracting node.Spec.ProviderID for node %v: %v", node.Name, err)
+		logger.Error(err, "Error extracting node.Spec.ProviderID for node", "node", klog.KObj(node))
 		return nil, err
 	}
 	mig, err := gce.gceManager.GetMigForInstance(ctx, ref)

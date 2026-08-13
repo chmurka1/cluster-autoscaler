@@ -331,11 +331,12 @@ func (client *autoscalingGceClientV1) CreateInstances(ctx context.Context, migRe
 }
 
 func instanceIdsToNamesMap(ctx context.Context, instanceProviderIds []string) map[string]bool {
+	logger := klog.FromContext(ctx)
 	instanceNames := make(map[string]bool, len(instanceProviderIds))
 	for _, inst := range instanceProviderIds {
 		ref, err := GceRefFromProviderId(inst)
 		if err != nil {
-			klog.Warningf("Failed to extract instance name from %q: %v", inst, err)
+			logger.Info("Failed to extract instance name", "instance", inst, "err", err)
 		} else {
 			inst = ref.Name
 		}
@@ -348,18 +349,18 @@ func instanceIdsToNamesMap(ctx context.Context, instanceProviderIds []string) ma
 // Calling this is normally not needed when interacting with the client, other methods should call it internally.
 // Can be used to extend the interface with more methods outside of this package.
 func (client *autoscalingGceClientV1) WaitForOperation(ctx context.Context, operationName, operationType, project, zone string) error {
+	logger := klog.FromContext(ctx)
 	ctx, cancel := context.WithTimeout(ctx, client.operationWaitTimeout)
 	defer cancel()
 
 	for {
-		klog.V(4).Infof("Waiting for operation %s/%s (%s/%s)", operationType, operationName, project, zone)
+		logger.V(4).Info("Waiting for operation", "operationType", operationType, "operation", operationName, "project", project, "zone", zone)
 		registerRequest("zone_operations", "wait")
 		op, err := client.gceService.ZoneOperations.Wait(project, zone, operationName).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("error while waiting for operation %s/%s: %w", operationType, operationName, err)
 		}
-
-		klog.V(4).Infof("Operation %s/%s (%s/%s) status: %s", operationType, operationName, project, zone, op.Status)
+		logger.V(4).Info("Operation status", "operationType", operationType, "operation", operationName, "project", project, "zone", zone, "status", op.Status)
 		if op.Status == "DONE" {
 			if op.Error != nil {
 				errBytes, err := op.Error.MarshalJSON()
@@ -396,6 +397,7 @@ func (client *autoscalingGceClientV1) DeleteInstances(ctx context.Context, migRe
 }
 
 func (client *autoscalingGceClientV1) FetchAllInstances(ctx context.Context, project, zone, filter string) ([]GceInstance, error) {
+	logger := klog.FromContext(ctx)
 	registerRequest("instances", "list")
 	instances := make([]GceInstance, 0)
 	loggingQuota := klogx.NewLoggingQuota(MaxInstancesLogged)
@@ -403,7 +405,7 @@ func (client *autoscalingGceClientV1) FetchAllInstances(ctx context.Context, pro
 		for _, gceInstance := range page.Items {
 			instance, err := externalToInternalInstance(gceInstance, loggingQuota)
 			if err != nil {
-				klog.Errorf("Error converting instance to GceInstance: %v", err)
+				logger.Error(err, "Error converting instance to GceInstance")
 				continue
 			}
 			instances = append(instances, instance)
@@ -411,7 +413,7 @@ func (client *autoscalingGceClientV1) FetchAllInstances(ctx context.Context, pro
 		return nil
 	})
 	if err != nil {
-		klog.Errorf("Failed listing Instances in zone %s, project %s: %v", zone, project, err)
+		logger.Error(err, "Failed to list instances in zone and project", "zone", zone, "project", project)
 		return nil, err
 	}
 	klogx.V(5).Over(loggingQuota).Infof("Unable to parse IGM for %v other instances", -loggingQuota.Left())
@@ -462,11 +464,12 @@ func createIgmRef(gceInstance *gce.Instance, project string, loggingQuota *klogx
 }
 
 func (client *autoscalingGceClientV1) FetchMigInstances(ctx context.Context, migRef GceRef) ([]GceInstance, error) {
+	logger := klog.FromContext(ctx)
 	registerRequest("instance_group_managers", "list_managed_instances")
 	b := newInstanceListBuilder(migRef)
 	err := client.gceService.InstanceGroupManagers.ListManagedInstances(migRef.Project, migRef.Zone, migRef.Name).Pages(ctx, b.loadPage)
 	if err != nil {
-		klog.V(4).Infof("Failed MIG info request for %s %s %s: %v", migRef.Project, migRef.Zone, migRef.Name, err)
+		logger.V(4).Info("Failed MIG info request", "project", migRef.Project, "zone", migRef.Zone, "migName", migRef.Name, "err", err)
 		return nil, err
 	}
 	return b.build(ctx), nil
@@ -562,9 +565,10 @@ func (i *instanceListBuilder) gceInstanceToInstance(ref GceRef, gceInstance *gce
 }
 
 func (i *instanceListBuilder) build(ctx context.Context) []GceInstance {
+	logger := klog.FromContext(ctx)
 	klogx.V(4).Over(i.errorLoggingQuota).Infof("Got %v other GCE instances being created with lastAttemptErrors", -i.errorLoggingQuota.Left())
 	if len(i.errorCodeCounts) > 0 {
-		klog.Warningf("Spotted following instance creation error codes: %#v", i.errorCodeCounts)
+		logger.Info("Spotted instance creation error codes", "errorCodeCounts", i.errorCodeCounts)
 	}
 	return i.infos
 }
@@ -754,13 +758,14 @@ func isInvalidReservationError(errorMessage string) bool {
 }
 
 func generateInstanceName(ctx context.Context, baseName string, existingNames map[string]bool) string {
+	logger := klog.FromContext(ctx)
 	for i := 0; i < 100; i++ {
 		name := fmt.Sprintf("%v-%v", baseName, rand.String(4))
 		if ok, _ := existingNames[name]; !ok {
 			return name
 		}
 	}
-	klog.Warning("Unable to create unique name for a new instance, duplicate name might occur")
+	logger.Info("Unable to create unique name for a new instance, duplicate name might occur")
 	name := fmt.Sprintf("%v-%v", baseName, rand.String(4))
 	return name
 }
@@ -834,6 +839,7 @@ func (client *autoscalingGceClientV1) FetchMigTemplate(ctx context.Context, migR
 }
 
 func (client *autoscalingGceClientV1) FetchMigsWithName(ctx context.Context, zone string, name *regexp.Regexp) ([]string, error) {
+	logger := klog.FromContext(ctx)
 	filter := fmt.Sprintf("name eq %s", name)
 	links := make([]string, 0)
 	registerRequest("instance_groups", "list")
@@ -841,7 +847,7 @@ func (client *autoscalingGceClientV1) FetchMigsWithName(ctx context.Context, zon
 	if err := req.Pages(ctx, func(page *gce.InstanceGroupList) error {
 		for _, ig := range page.Items {
 			links = append(links, ig.SelfLink)
-			klog.V(3).Infof("found managed instance group %s matching regexp %s", ig.Name, name)
+			logger.V(3).Info("Found managed instance group matching regexp", "migName", ig.Name, "regex", name)
 		}
 		return nil
 	}); err != nil {
