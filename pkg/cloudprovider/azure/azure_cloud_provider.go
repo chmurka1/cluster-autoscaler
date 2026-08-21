@@ -80,7 +80,7 @@ func (azure *AzureCloudProvider) Cleanup(ctx context.Context) error {
 }
 
 // Name returns name of the cloud provider.
-func (azure *AzureCloudProvider) Name(ctx context.Context) string {
+func (azure *AzureCloudProvider) Name() string {
 	return "azure"
 }
 

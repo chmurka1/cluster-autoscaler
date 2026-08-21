@@ -1486,7 +1486,7 @@ func TestBuildNodeFromTemplateArch(t *testing.T) {
 				t.Fatalf("BuildNodeFromTemplate unexpected error: %v", gotErr)
 			}
 			gotArch := gotNode.Labels[apiv1.LabelArchStable]
-			if diff := cmp.Diff(tc.wantArch.Name(context.TODO()), gotArch); diff != "" {
+			if diff := cmp.Diff(tc.wantArch.Name(), gotArch); diff != "" {
 				t.Errorf("BuildNodeFromTemplate arch label diff (-want +got):\n%s", diff)
 			}
 		})

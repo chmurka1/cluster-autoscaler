@@ -80,7 +80,7 @@ func (gce *GceCloudProvider) Cleanup(ctx context.Context) error {
 }
 
 // Name returns name of the cloud provider.
-func (gce *GceCloudProvider) Name(ctx context.Context) string {
+func (gce *GceCloudProvider) Name() string {
 	return cloudprovider.GceProviderName
 }
 

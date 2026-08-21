@@ -2583,7 +2583,7 @@ func TestScaleSetETagRetrySkippedWhenAlreadyAtTarget(t *testing.T) {
 
 // TestScaleSetETagRefreshInvalidatesInstanceCache verifies that the ETag refresh
 // invalidates the instance cache. A 412 means another writer changed the VMSS between
-// CA's read and its write, so the instance cache (which backs Nodes(context.TODO()) and instance-state
+// CA's read and its write, so the instance cache (which backs Nodes() and instance-state
 // queries) is stale after the refresh and must be recomputed from fresh Azure state.
 func TestScaleSetETagRefreshInvalidatesInstanceCache(t *testing.T) {
 	t.Parallel()

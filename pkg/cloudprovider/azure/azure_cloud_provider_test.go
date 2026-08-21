@@ -132,7 +132,7 @@ func TestBuildAzureCloudProvider(t *testing.T) {
 
 func TestName(t *testing.T) {
 	provider := newTestProvider(t)
-	assert.Equal(t, provider.Name(context.TODO()), "azure")
+	assert.Equal(t, provider.Name(), "azure")
 }
 
 func TestNodeGroups(t *testing.T) {

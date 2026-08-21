@@ -607,7 +607,7 @@ func (scaleSet *ScaleSet) retryCreateOrUpdateWithFreshETag(ctx context.Context, 
 	scaleSet.manager.azureCache.setScaleSet(scaleSet.Name, fresh)
 
 	// The 412 means another writer changed the VMSS between our read and this write, so
-	// the instance cache (which backs Nodes(context.TODO()) and instance-state queries) now reflects a
+	// the instance cache (which backs Nodes() and instance-state queries) now reflects a
 	// pre-conflict view of the scale set. Invalidate it so instance-derived data is
 	// recomputed from fresh Azure state rather than a stale snapshot. Callers of this
 	// method hold sizeMutex; invalidateInstanceCache guards the instance cache separately.

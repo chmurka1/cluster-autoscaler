@@ -339,7 +339,7 @@ func BuildGenericLabels(ref GceRef, machineType string, nodeName string, os Oper
 	}
 
 	// TODO: extract it somehow
-	result[apiv1.LabelArchStable] = arch.Name(context.TODO())
+	result[apiv1.LabelArchStable] = arch.Name()
 	result[apiv1.LabelOSStable] = string(os)
 
 	result[apiv1.LabelInstanceTypeStable] = machineType
@@ -608,7 +608,7 @@ const (
 )
 
 // Name returns the string value for SystemArchitecture
-func (s SystemArchitecture) Name(ctx context.Context) string {
+func (s SystemArchitecture) Name() string {
 	return string(s)
 }
 
